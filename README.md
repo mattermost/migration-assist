@@ -7,7 +7,7 @@ The tool helps to automate the tasks defined in the [Migration guidelines from M
 You can use `go` to install the tool.
 
 ```
-$ go install github.com/isacikgoz/migration-assist/cmd/migration-assist@latest
+$ go install github.com/mattermost/migration-assist/cmd/migration-assist@latest
 ```
 
 ## Usage
