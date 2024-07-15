@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/isacikgoz/migration-assist/internal/git"
-	"github.com/isacikgoz/migration-assist/internal/logger"
+	"github.com/mattermost/migration-assist/internal/git"
+	"github.com/mattermost/migration-assist/internal/logger"
 )
 
 type CreateTable struct {

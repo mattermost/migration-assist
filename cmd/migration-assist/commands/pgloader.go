@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/isacikgoz/migration-assist/internal/logger"
-	"github.com/isacikgoz/migration-assist/internal/pgloader"
+	"github.com/mattermost/migration-assist/internal/logger"
+	"github.com/mattermost/migration-assist/internal/pgloader"
 	"github.com/spf13/cobra"
 )
 

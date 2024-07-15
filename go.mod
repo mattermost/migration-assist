@@ -1,4 +1,4 @@
-module github.com/isacikgoz/migration-assist
+module github.com/mattermost/migration-assist
 
 go 1.22.2
 

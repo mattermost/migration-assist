@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"text/template"
 
-	"github.com/isacikgoz/migration-assist/internal/logger"
-	"github.com/isacikgoz/migration-assist/internal/store"
+	"github.com/mattermost/migration-assist/internal/logger"
+	"github.com/mattermost/migration-assist/internal/store"
 )
 
 //go:embed templates
