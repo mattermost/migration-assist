@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/isacikgoz/migration-assist/internal/logger"
+	"github.com/mattermost/migration-assist/internal/logger"
 )
 
 func openPostgres(dataSource string) (*DB, error) {

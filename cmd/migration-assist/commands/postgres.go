@@ -5,10 +5,10 @@ import (
 	"os"
 
 	"github.com/blang/semver/v4"
-	"github.com/isacikgoz/migration-assist/internal/git"
-	"github.com/isacikgoz/migration-assist/internal/logger"
-	"github.com/isacikgoz/migration-assist/internal/store"
-	"github.com/isacikgoz/migration-assist/queries"
+	"github.com/mattermost/migration-assist/internal/git"
+	"github.com/mattermost/migration-assist/internal/logger"
+	"github.com/mattermost/migration-assist/internal/store"
+	"github.com/mattermost/migration-assist/queries"
 	"github.com/spf13/cobra"
 )
 

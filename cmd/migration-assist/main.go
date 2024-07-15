@@ -8,7 +8,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
 
-	"github.com/isacikgoz/migration-assist/cmd/migration-assist/commands"
+	"github.com/mattermost/migration-assist/cmd/migration-assist/commands"
 )
 
 var root = &cobra.Command{

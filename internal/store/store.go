@@ -14,7 +14,7 @@ import (
 	"github.com/mattermost/morph/drivers/postgres"
 	"github.com/mattermost/morph/sources/file"
 
-	"github.com/isacikgoz/migration-assist/internal/logger"
+	"github.com/mattermost/migration-assist/internal/logger"
 )
 
 const (
