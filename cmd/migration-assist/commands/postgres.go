@@ -76,7 +76,7 @@ func runTargetCheckCmdF(cmd *cobra.Command, args []string) error {
 	}
 
 	// download required migrations if necessary
-	migrationDir, _ := cmd.Flags().GetString("migration-dir")
+	migrationDir, _ := cmd.Flags().GetString("migrations-dir")
 	if migrationDir == "" {
 		mmVersion, _ := cmd.Flags().GetString("mattermost-version")
 		v, err2 := semver.ParseTolerant(mmVersion)
