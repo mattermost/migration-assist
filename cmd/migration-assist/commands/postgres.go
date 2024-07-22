@@ -7,6 +7,7 @@ import (
 	"github.com/blang/semver/v4"
 	"github.com/mattermost/migration-assist/internal/git"
 	"github.com/mattermost/migration-assist/internal/logger"
+	"github.com/mattermost/migration-assist/internal/pgloader"
 	"github.com/mattermost/migration-assist/internal/store"
 	"github.com/mattermost/migration-assist/queries"
 	"github.com/spf13/cobra"
@@ -29,6 +30,7 @@ func TargetCheckCmd() *cobra.Command {
 	cmd.Flags().String("mattermost-version", "v8.1", "Mattermost version to be cloned to run migrations")
 	cmd.Flags().String("migrations-dir", "", "Migrations directory (should be used if mattermost-version is not supplied)")
 	cmd.Flags().String("git", "git", "git binary to be executed if the repository will be cloned")
+	cmd.Flags().Bool("check-schema-owner", true, "Check if the schema owner is the same as the user running the migration")
 	cmd.PersistentFlags().String("schema", "public", "the default schema to be used for the session")
 
 	return cmd
@@ -69,6 +71,22 @@ func runTargetCheckCmdF(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("could not ping postgres: %w", err)
 	}
 	baseLogger.Println("connected to postgres successfully.")
+
+	var params pgloader.Parameters
+	err = pgloader.ParsePostgres(&params, args[0])
+	if err != nil {
+		return fmt.Errorf("could not parse postgres connection string: %w", err)
+	}
+
+	checkSchema, _ := cmd.Flags().GetBool("check-schema-owner")
+	if checkSchema {
+		err = postgresDB.CheckPostgresSchemaOwnership(cmd.Context(), "public", params.PGUser)
+		if err != nil {
+			return fmt.Errorf("could not check schema owner: %w", err)
+		}
+
+		baseLogger.Println("schema owner check passed.")
+	}
 
 	runMigrations, _ := cmd.Flags().GetBool("run-migrations")
 	if !runMigrations {
