@@ -10,6 +10,10 @@ import (
 	"github.com/mattermost/migration-assist/internal/logger"
 )
 
+var (
+	ignoredTablesForEmptyCheck = map[string]bool{"db_migrations": true, "systems": true, "config_migrations": true, "db_lock": true}
+)
+
 func openPostgres(dataSource string) (*DB, error) {
 	db, err := sql.Open("postgres", dataSource)
 	if err != nil {
@@ -71,4 +75,40 @@ func (db *DB) CheckPostgresDefaultSchema(ctx context.Context, schema string, log
 	}
 
 	return nil
+}
+
+func (db *DB) CheckIfPostgresTablesEmpty(ctx context.Context) ([]string, error) {
+	var tables []string
+	rows, err := db.db.QueryContext(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+	if err != nil {
+		return nil, fmt.Errorf("could not fetch tables from the database: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var table string
+		err := rows.Scan(&table)
+		if err != nil {
+			return nil, fmt.Errorf("could not scan the table name: %w", err)
+		}
+		if _, ok := ignoredTablesForEmptyCheck[table]; ok {
+			continue
+		}
+		tables = append(tables, table)
+	}
+
+	tablesWithData := []string{}
+	for _, table := range tables {
+		var count int
+		err := db.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count)
+		if err != nil {
+			return nil, fmt.Errorf("could not fetch count from the table %s: %w", table, err)
+		}
+		if count == 0 {
+			continue
+		}
+		tablesWithData = append(tablesWithData, table)
+	}
+
+	return tablesWithData, nil
 }
