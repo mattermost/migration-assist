@@ -1,0 +1,38 @@
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./cmd/migration-assist
+    id: "migration-assist"
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X github.com/mattermost/migration-assist/cmd/migration-assist/commands.Version={{.Version}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}-{{- title .Os }}-{{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+
+changelog:
+  sort: desc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  github:
+    owner: mattermost
+    name: migration-assist
+  name_template: "{{ .ProjectName }}-v{{ .Version }}"
+  disable: false
