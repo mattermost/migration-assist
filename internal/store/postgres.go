@@ -77,6 +77,22 @@ func (db *DB) CheckPostgresDefaultSchema(ctx context.Context, schema string, log
 	return nil
 }
 
+func (db *DB) CheckPostgresSchemaOwnership(ctx context.Context, schema, user string) error {
+	cnt, err := db.RunSelectCountQuery(ctx, fmt.Sprintf(`SELECT COUNT(*)
+		FROM information_schema.schemata
+		WHERE schema_name = '%s'
+		AND schema_owner = '%s'`, schema, user))
+	if err != nil {
+		return fmt.Errorf("could not fetch schema information: %w", err)
+	}
+
+	if cnt == 0 {
+		return fmt.Errorf("the user %q is not owner of the %q schema", user, schema)
+	}
+
+	return nil
+}
+
 func (db *DB) CheckIfPostgresTablesEmpty(ctx context.Context) ([]string, error) {
 	var tables []string
 	rows, err := db.db.QueryContext(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")

@@ -15,7 +15,7 @@ import (
 //go:embed templates
 var assets embed.FS
 
-type parameters struct {
+type Parameters struct {
 	MySQLUser     string
 	MySQLPassword string
 	MySQLAddress  string
@@ -57,7 +57,7 @@ func GenerateConfigurationFile(output, product string, config PgLoaderConfig, ba
 		return fmt.Errorf("could not parse template: %w", err)
 	}
 
-	params := parameters{
+	params := Parameters{
 		RemoveNullCharacters: config.RemoveNullCharacters,
 	}
 	err = parseMySQL(&params, config.MySQLDSN)
@@ -65,7 +65,7 @@ func GenerateConfigurationFile(output, product string, config PgLoaderConfig, ba
 		return fmt.Errorf("could not parse mysql DSN: %w", err)
 	}
 
-	err = parsePostgres(&params, config.PostgresDSN)
+	err = ParsePostgres(&params, config.PostgresDSN)
 	if err != nil {
 		return fmt.Errorf("could not parse postgres DSN: %w", err)
 	}
@@ -113,7 +113,7 @@ func GenerateConfigurationFile(output, product string, config PgLoaderConfig, ba
 	return nil
 }
 
-func parseMySQL(params *parameters, dsn string) error {
+func parseMySQL(params *Parameters, dsn string) error {
 	regex := regexp.MustCompile(`^(?P<user>[^:]+):(?P<password>[^@]+)@tcp\((?P<address>[^:]+):(?P<port>\d+)\)\/(?P<database>.+)$`)
 	match := regex.FindStringSubmatch(dsn)
 
@@ -134,7 +134,7 @@ func parseMySQL(params *parameters, dsn string) error {
 	return nil
 }
 
-func parsePostgres(params *parameters, dsn string) error {
+func ParsePostgres(params *Parameters, dsn string) error {
 	regex := regexp.MustCompile(`^postgres:\/\/(?P<user>[^:]+):(?P<password>[^@]+)@(?P<address>[^:]+):(?P<port>\d+)\/(?P<database>[^\?]+)`)
 	match := regex.FindStringSubmatch(dsn)
 
