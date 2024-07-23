@@ -31,6 +31,7 @@ func TargetCheckCmd() *cobra.Command {
 	cmd.Flags().String("migrations-dir", "", "Migrations directory (should be used if mattermost-version is not supplied)")
 	cmd.Flags().String("git", "git", "git binary to be executed if the repository will be cloned")
 	cmd.Flags().Bool("check-schema-owner", true, "Check if the schema owner is the same as the user running the migration")
+	cmd.Flags().Bool("check-tables-empty", true, "Check if tables are empty before running migrations")
 	cmd.PersistentFlags().String("schema", "public", "the default schema to be used for the session")
 
 	return cmd
@@ -86,6 +87,19 @@ func runTargetCheckCmdF(cmd *cobra.Command, args []string) error {
 		}
 
 		baseLogger.Println("schema owner check passed.")
+	}
+
+	// check if tables are empty
+	checkTablesEmpty, _ := cmd.Flags().GetBool("check-tables-empty")
+	if checkTablesEmpty {
+		baseLogger.Println("checking if tables are empty...")
+		tables, err2 := postgresDB.CheckIfPostgresTablesEmpty(cmd.Context())
+		if err2 != nil {
+			return fmt.Errorf("could not check if tables are empty: %w", err2)
+		}
+		for _, table := range tables {
+			baseLogger.Printf("table %s is not empty\n", table)
+		}
 	}
 
 	runMigrations, _ := cmd.Flags().GetBool("run-migrations")
