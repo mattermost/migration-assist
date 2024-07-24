@@ -26,6 +26,7 @@ func main() {
 		commands.SourceCheckCmd(),
 		commands.TargetCheckCmd(),
 		commands.GeneratePgloaderConfigCmd(),
+		commands.VersionCmd(),
 	)
 
 	if err := root.Execute(); err != nil {

@@ -8,3 +8,5 @@ migrations
 postgres
 mysql
 diffs
+
+dist/
