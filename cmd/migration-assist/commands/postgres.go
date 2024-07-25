@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/blang/semver/v4"
 	"github.com/mattermost/migration-assist/internal/git"
@@ -167,6 +168,13 @@ func runPostMigrateCmdF(c *cobra.Command, args []string) error {
 
 	err = postgresDB.RunEmbeddedMigrations(queries.Assets(), "post-migrate", baseLogger)
 	if err != nil {
+		if strings.Contains(err.Error(), "pq: string is too long for tsvector") {
+			baseLogger.Println("Index creation failed due to content being too long for tsvector.\n" +
+				"This is expected if you have a large amount of data.\n\n" +
+				"Please run the migration manually and refer to the documentation page below:\n" +
+				"https://docs.mattermost.com/deploy/manual-postgres-migration.html#restore-full-text-indexes")
+			return nil
+		}
 		return fmt.Errorf("could not run migrations: %w", err)
 	}
 

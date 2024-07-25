@@ -28,7 +28,7 @@ func GeneratePgloaderConfigCmd() *cobra.Command {
 
 	// Optional flags
 	cmd.PersistentFlags().String("output", "", "The filename of the generated configuration")
-	cmd.PersistentFlags().Bool("remove-null-chars", false, "Adds transformations to remove null characters on the fly")
+	cmd.PersistentFlags().Bool("remove-null-chars", true, "Adds transformations to remove null characters on the fly")
 	return cmd
 }
 
