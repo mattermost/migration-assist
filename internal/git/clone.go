@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/blang/semver/v4"
@@ -13,7 +14,12 @@ import (
 
 const (
 	gitBinary               = "git"
+	minGitVersion           = "2.28.0"
 	mattermostRepositoryURL = "https://github.com/mattermost/mattermost.git"
+)
+
+var (
+	versionRegex = regexp.MustCompile(`v*[0-9]+\.[0-9]+`)
 )
 
 type CloneOptions struct {
@@ -28,6 +34,19 @@ func CloneMigrations(opts CloneOptions, baseLogger logger.LogInterface) error {
 	_, err := exec.LookPath(gitBinary)
 	if err != nil {
 		return fmt.Errorf("git binary is not installed :%w", err)
+	}
+
+	out, err := exec.Command(gitBinary, "version").Output()
+	if err != nil {
+		return fmt.Errorf("error while checking git version: %w", err)
+	}
+	baseLogger.Printf("git version: %s\n", strings.TrimSpace(string(out)))
+	gitVersion, err := semver.ParseTolerant(versionRegex.FindString(string(out)))
+	if err != nil {
+		return fmt.Errorf("error while parsing git version: %w", err)
+	}
+	if semver.MustParse(minGitVersion).GT(gitVersion) {
+		return fmt.Errorf("git version should be at least %s, found %s", minGitVersion, gitVersion.String())
 	}
 
 	// 2. clone the repository
