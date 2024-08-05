@@ -1,0 +1,29 @@
+LOAD DATABASE
+    FROM       mysql://{{ .MySQLUser }}:{{ .MySQLPassword }}@{{ .MySQLAddress }}/{{ .SourceSchema }}
+    INTO       pgsql://{{ .PGUser }}:{{ .PGPassword }}@{{ .PGAddress }}/{{ .TargetSchema }}
+
+WITH include drop, create tables, create indexes, reset sequences,
+    workers = 8, concurrency = 1,
+    multiple readers per thread, rows per range = 50000,
+    preserve index names
+
+SET PostgreSQL PARAMETERS
+    maintenance_work_mem to '128MB',
+    work_mem to '12MB'
+
+SET MySQL PARAMETERS
+    net_read_timeout  = '120',
+    net_write_timeout = '120'
+
+CAST type json to jsonb drop typemod{{if .RemoveNullCharacters}} using remove-null-characters{{end}}
+
+INCLUDING ONLY TABLE NAMES MATCHING
+    ~/calls/
+
+BEFORE LOAD DO
+    $$ ALTER SCHEMA public RENAME TO {{ .SourceSchema }}; $$
+
+AFTER LOAD DO
+    $$ ALTER SCHEMA {{ .SourceSchema }} RENAME TO public; $$,
+    $$ SELECT pg_catalog.set_config('search_path', '"$user", {{ .SearchPath }}', false); $$,
+    $$ ALTER USER {{ .PGUser }} SET SEARCH_PATH TO '{{ .SearchPath }}'; $$;

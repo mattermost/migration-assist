@@ -44,6 +44,8 @@ func GenerateConfigurationFile(output, product string, config PgLoaderConfig, ba
 		f = "boards"
 	case "playbooks":
 		f = "playbooks"
+	case "calls":
+		f = "calls"
 	default:
 		f = "config"
 	}
