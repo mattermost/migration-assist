@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"github.com/mattermost/migration-assist/internal/pgloader"
 	"github.com/mattermost/migration-assist/internal/store"
 	"github.com/mattermost/migration-assist/queries"
+	"github.com/mattermost/morph/sources"
+	"github.com/mattermost/morph/sources/file"
 	"github.com/spf13/cobra"
 )
 
@@ -108,9 +111,35 @@ func runTargetCheckCmdF(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	mysqlMigrations := "mysql.output"
+	if len(args) > 1 {
+		mysqlMigrations = args[1]
+	}
+
+	var src sources.Source
+
 	// download required migrations if necessary
 	migrationDir, _ := cmd.Flags().GetString("migrations-dir")
-	if migrationDir == "" {
+	if _, err = os.Stat(mysqlMigrations); !os.IsNotExist(err) {
+		baseLogger.Printf("loading migrations from the %s file\n", mysqlMigrations)
+		// load migrations from the applied migrations file
+		var cfg store.DBConfig
+		f, err2 := os.Open(mysqlMigrations)
+		if err2 != nil {
+			return fmt.Errorf("could not open file: %w", err2)
+		}
+		defer f.Close()
+
+		err = json.NewDecoder(f).Decode(&cfg)
+		if err != nil {
+			return fmt.Errorf("could not decode file: %w", err)
+		}
+
+		src, err = store.CreateSourceFromEbmedded(queries.Assets(), "migrations/postgres", cfg.AppliedMigrations)
+		if err != nil {
+			return fmt.Errorf("could not create source from embedded: %w", err)
+		}
+	} else if migrationDir == "" {
 		mmVersion, _ := cmd.Flags().GetString("mattermost-version")
 		v, err2 := semver.ParseTolerant(mmVersion)
 		if err2 != nil {
@@ -133,13 +162,20 @@ func runTargetCheckCmdF(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("error during cloning migrations: %w", err)
 		}
 
-		migrationDir = "postgres"
+		src, err = file.Open("postgres")
+		if err != nil {
+			return fmt.Errorf("could not read migrations: %w", err)
+		}
+	} else {
+		src, err = file.Open(migrationDir)
+		if err != nil {
+			return fmt.Errorf("could not read migrations: %w", err)
+		}
 	}
 
 	// run the migrations
 	baseLogger.Println("running migrations..")
-
-	err = postgresDB.RunMigrations(migrationDir)
+	err = postgresDB.RunMigrations(src)
 	if err != nil {
 		return fmt.Errorf("could not run migrations: %w", err)
 	}

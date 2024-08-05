@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/mattermost/migration-assist/internal/logger"
 	"github.com/mattermost/migration-assist/internal/store"
 	"github.com/mattermost/migration-assist/queries"
+	"github.com/mattermost/morph/sources/file"
 )
 
 func SourceCheckCmd() *cobra.Command {
@@ -37,6 +39,7 @@ func SourceCheckCmd() *cobra.Command {
 	cmd.Flags().Bool("save-diff", false, "Writes diffs to files")
 	cmd.Flags().String("migrations-dir", "", "Migrations directory (should be used if mattermost-version is not supplied)")
 	cmd.Flags().String("mattermost-version", "v9.7", "Mattermost version to be cloned to run migrations")
+	cmd.Flags().String("output", "mysql.output", "Output file for the applied migrations, postgres subcommands will use this file to apply the migrations")
 
 	return cmd
 }
@@ -64,6 +67,24 @@ func runSourceCheckCmdF(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("could not ping mysql: %w", err)
 	}
 	baseLogger.Println("connected to mysql successfully...")
+
+	applied, err := mysqlDB.GetAppliedMigrations(cmd.Context())
+	if err != nil {
+		return fmt.Errorf("could not get applied migrations: %w", err)
+	}
+	mysqlConfig := store.DBConfig{
+		AppliedMigrations: applied,
+	}
+
+	b, err := json.MarshalIndent(mysqlConfig, "", "    ")
+	if err != nil {
+		return fmt.Errorf("could not marshal mysql config: %w", err)
+	}
+
+	outputFile, _ := cmd.Flags().GetString("output")
+	if err = os.WriteFile(outputFile, b, 0600); err != nil {
+		return fmt.Errorf("could not write to output file: %w", err)
+	}
 
 	fullSchema, _ := cmd.Flags().GetBool("full-schema-check")
 	if fullSchema {
@@ -285,7 +306,12 @@ func runFullSchemaCheck(db *store.DB, migrationsDir, tempDir string, v semver.Ve
 	// run the migrations
 	baseLogger.Println("running migrations...")
 
-	err = testDB.RunMigrations(dir)
+	src, err := file.Open(dir)
+	if err != nil {
+		return fmt.Errorf("could not read migrations: %w", err)
+	}
+
+	err = testDB.RunMigrations(src)
 	if err != nil {
 		return fmt.Errorf("could not run migrations: %w", err)
 	}
