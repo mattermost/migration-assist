@@ -1,0 +1,71 @@
+version: "2.4"
+services:
+  mysql:
+    image: "mysql/mysql-server:8.0.32"
+    restart: always
+    networks:
+      - ma-test
+    ports:
+      - "3606:3306"
+    environment:
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_ROOT_PASSWORD: mostest
+      MYSQL_PASSWORD: mostest
+      MYSQL_USER: mmuser
+      MYSQL_DATABASE: mattermost_test
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - ./docker/mysql.conf.d/source.cnf:/etc/mysql/conf.d/mysql.cnf
+  postgres:
+    image: "postgres:11"
+    restart: always
+    networks:
+      - ma-test
+    ports:
+      - "8432:5432"
+    environment:
+      POSTGRES_USER: mmuser
+      POSTGRES_PASSWORD: mostest
+      POSTGRES_DB: mattermost_test
+    command: postgres -c 'config_file=/etc/postgresql/postgresql.conf'
+    volumes:
+      - "./docker/postgres.conf:/etc/postgresql/postgresql.conf"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "mmuser", "-d", "mattermost_test"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+  mattermost:
+    image: mattermost/mattermost-team-edition:9.11.0
+    restart: always
+    networks:
+      - ma-test
+    ports:
+      - "8088:8065"
+    depends_on:
+      - mysql
+      - postgres
+    environment:
+      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+      MM_SERVICESETTINGS_SITEURL: "http://localhost:8065"
+      MM_SERVICESETTINGS_LISTENADDRESS: ":8065"
+      MM_SQLSETTINGS_DRIVERNAME: "mysql"
+      MM_SQLSETTINGS_DATASOURCE: "mmuser:mostest@tcp(mysql:3306)/mattermost_test?charset=utf8mb4,utf8&readTimeout=30s&writeTimeout=30s"
+      MM_TEAMSETTINGS_MAXUSERSPERTEAM: "100"
+  start_dependencies:
+    image: mattermost/mattermost-wait-for-dep:latest
+    networks:
+      - ma-test
+    depends_on:
+      - mysql
+      - postgres
+      - mattermost
+    command: mysql:3306 postgres:5432 mattermost:8065
+
+networks:
+  ma-test:
+    driver: bridge

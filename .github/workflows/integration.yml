@@ -1,0 +1,60 @@
+name: Integration Test
+on:
+  push:
+    branches:
+      - MM-58713
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    env:
+      MYSQL_DSN: mmuser:mostest@tcp(localhost:3606)/mattermost_test
+      PGSQL_DSN: postgres://mmuser:mostest@localhost:8432/mattermost_test?sslmode=disable
+      MM_VERSION: v9.11
+    steps:
+      - name: Checkout migration-assist project
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: Calculate Golang Version
+        id: go
+        run: echo GO_VERSION=$(sed -n '3p' go.mod | awk '{print $2}') >> "${GITHUB_OUTPUT}"
+      - name: Setup Go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version: ${{ steps.go.outputs.GO_VERSION }}
+      - name: Run docker compose
+        run: |
+          cd build
+          docker compose --ansi never run --rm start_dependencies
+          docker compose --ansi never exec -T mattermost sh -c 'bin/mmctl sampledata -u 60 --local';
+          docker compose --ansi never ps
+      - name: Fix MySQL user permissions
+        run: |
+          cd build
+          docker compose exec mysql sh -c "sed -i '/# default-authentication-plugin/c\default-authentication-plugin=mysql_native_password' /etc/my.cnf"
+          docker compose exec mysql sh -c "mysql -u root -pmostest -e \"ALTER USER 'mmuser'@'%' IDENTIFIED WITH mysql_native_password BY 'mostest';\""
+          docker compose exec mysql sh -c "mysql -u root -pmostest -e \"ALTER USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY 'mostest';\""
+          docker compose restart mysql && sleep 10
+      - name: Build migration-assist
+        run: |
+          go install ./cmd/migration-assist/
+      - name: Run migration-assist mysql
+        run: migration-assist mysql $MYSQL_DSN --fix-unicode --fix-artifacts --fix-varchar
+      - name: Run migration-assist postgres
+        run: migration-assist postgres $PGSQL_DSN --run-migrations --mattermost-version=$MM_VERSION
+      - name: Run migration-assist pgloader
+        run: |
+          migration-assist pgloader --mysql $MYSQL_DSN --postgres $PGSQL_DSN > migration.load
+      - name: Run pgloader
+        run: |
+          docker run --rm -v $(pwd):/home/migration --network="host" mattermost/mattermost-pgloader pgloader migration.load > migration.log
+      - name: Stop docker compose
+        run: |
+          cd build
+          docker compose --ansi never stop
+      - name: Persist test artifacts
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: test-artifact
+          path: |
+            migration.load
+            migration.log
