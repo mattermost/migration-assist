@@ -2,7 +2,7 @@ name: Integration Test
 on:
   push:
     branches:
-      - MM-58713
+      - main
 
 jobs:
   test:
