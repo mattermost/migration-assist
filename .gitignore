@@ -3,10 +3,8 @@
 .vscode
 
 # possible test files
-migrations
 *.load
-postgres
-mysql
 diffs
+*.output
 
 dist/
