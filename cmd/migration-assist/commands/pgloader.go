@@ -19,6 +19,7 @@ func GeneratePgloaderConfigCmd() *cobra.Command {
 
 	cmd.AddCommand(GeneratePgloaderConfigBoardsCmd())
 	cmd.AddCommand(GeneratePgloaderConfigPlaybooksCmd())
+	cmd.AddCommand(GeneratePgloaderConfigCallsCmd())
 
 	// Required flags
 	cmd.PersistentFlags().String("mysql", "", "DSN for MySQL")
@@ -49,6 +50,17 @@ func GeneratePgloaderConfigPlaybooksCmd() *cobra.Command {
 		Short:   "Generates a pgLoader configuration from DSN values for Playbooks",
 		RunE:    genPgloaderCmdFn("playbooks"),
 		Example: "  migration-assist pgloader playbooks \\\n--postgres=\"postgres://mmuser:mostest@localhost:8765/mattermost_test?sslmode=disable\" \\\n--mysql=\"root:mostest@tcp(localhost:3306)/mattermost_test\"",
+	}
+
+	return cmd
+}
+
+func GeneratePgloaderConfigCallsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "calls",
+		Short:   "Generates a pgLoader configuration from DSN values for Calls",
+		RunE:    genPgloaderCmdFn("calls"),
+		Example: "  migration-assist pgloader calls \\\n--postgres=\"postgres://mmuser:mostest@localhost:8765/mattermost_test?sslmode=disable\" \\\n--mysql=\"root:mostest@tcp(localhost:3306)/mattermost_test\"",
 	}
 
 	return cmd

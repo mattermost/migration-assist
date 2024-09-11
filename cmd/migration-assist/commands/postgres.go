@@ -31,7 +31,7 @@ func TargetCheckCmd() *cobra.Command {
 
 	// Optional flags
 	cmd.Flags().Bool("run-migrations", false, "Runs migrations for Postgres schema")
-	cmd.Flags().String("mattermost-version", "v8.1", "Mattermost version to be cloned to run migrations")
+	cmd.Flags().String("mattermost-version", "", "Mattermost version to be cloned to run migrations (example: v8.1)")
 	cmd.Flags().String("migrations-dir", "", "Migrations directory (should be used if mattermost-version is not supplied)")
 	cmd.Flags().String("git", "git", "git binary to be executed if the repository will be cloned")
 	cmd.Flags().Bool("check-schema-owner", true, "Check if the schema owner is the same as the user running the migration")
@@ -141,9 +141,12 @@ func runTargetCheckCmdF(cmd *cobra.Command, args []string) error {
 		}
 	} else if migrationDir == "" {
 		mmVersion, _ := cmd.Flags().GetString("mattermost-version")
+		if mmVersion == "" {
+			return fmt.Errorf("--mattermost-version needs to be supplied to run migrations")
+		}
 		v, err2 := semver.ParseTolerant(mmVersion)
 		if err2 != nil {
-			return fmt.Errorf("could not parse version: %w", err2)
+			return fmt.Errorf("could not parse mattermost version: %w", err2)
 		}
 
 		tempDir, err3 := os.MkdirTemp("", "mattermost")
