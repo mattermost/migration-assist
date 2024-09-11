@@ -19,11 +19,12 @@ import (
 
 func TargetCheckCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "postgres",
-		Short:   "Checks the Postgres database schema whether it is ready for the migration",
-		RunE:    runTargetCheckCmdF,
-		Example: "  migration-assist postgres \"postgres://mmuser:mostest@localhost:8765/mattermost_test?sslmode=disable\" \\\n--run-migrations",
-		Args:    cobra.MinimumNArgs(1),
+		Use:   "postgres",
+		Short: "Checks the Postgres database schema whether it is ready for the migration",
+		RunE:  runTargetCheckCmdF,
+		Example: "  migration-assist postgres \"postgres://mmuser:mostest@localhost:8765/mattermost_test?sslmode=disable\" \\\n--run-migrations" +
+			"\n\n--mattermost-version, --migrations-dir, --applied-migrations are mutually exclusive. Use only one of these flags.\n",
+		Args: cobra.MinimumNArgs(1),
 	}
 
 	amCmd := RunAfterMigration()
@@ -31,9 +32,10 @@ func TargetCheckCmd() *cobra.Command {
 
 	// Optional flags
 	cmd.Flags().Bool("run-migrations", false, "Runs migrations for Postgres schema")
-	cmd.Flags().String("mattermost-version", "", "Mattermost version to be cloned to run migrations (example: v8.1)")
-	cmd.Flags().String("migrations-dir", "", "Migrations directory (should be used if mattermost-version is not supplied)")
-	cmd.Flags().String("git", "git", "git binary to be executed if the repository will be cloned")
+	cmd.Flags().String("mattermost-version", "", "Mattermost version to be cloned to run migrations (example: \"v8.1\")")
+	cmd.Flags().String("migrations-dir", "", "Migrations directory (should be used if the migrations are already cloned separately)")
+	cmd.Flags().String("applied-migrations", "", "File containing the list of applied migrations (example: \"mysql.output\")")
+	cmd.Flags().String("git", "git", "git binary to be executed if the repository will be cloned (ie. --mattermost-version is supplied)")
 	cmd.Flags().Bool("check-schema-owner", true, "Check if the schema owner is the same as the user running the migration")
 	cmd.Flags().Bool("check-tables-empty", true, "Check if tables are empty before running migrations")
 	cmd.PersistentFlags().String("schema", "public", "the default schema to be used for the session")
@@ -111,69 +113,13 @@ func runTargetCheckCmdF(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	mysqlMigrations := "mysql.output"
-	if len(args) > 1 {
-		mysqlMigrations = args[1]
-	}
-
-	var src sources.Source
-
-	// download required migrations if necessary
+	mysqlMigrations, _ := cmd.Flags().GetString("applied-migrations")
+	mmVersion, _ := cmd.Flags().GetString("mattermost-version")
 	migrationDir, _ := cmd.Flags().GetString("migrations-dir")
-	if _, err = os.Stat(mysqlMigrations); !os.IsNotExist(err) {
-		baseLogger.Printf("loading migrations from the %s file\n", mysqlMigrations)
-		// load migrations from the applied migrations file
-		var cfg store.DBConfig
-		f, err2 := os.Open(mysqlMigrations)
-		if err2 != nil {
-			return fmt.Errorf("could not open file: %w", err2)
-		}
-		defer f.Close()
 
-		err = json.NewDecoder(f).Decode(&cfg)
-		if err != nil {
-			return fmt.Errorf("could not decode file: %w", err)
-		}
-
-		src, err = store.CreateSourceFromEbmedded(queries.Assets(), "migrations/postgres", cfg.AppliedMigrations)
-		if err != nil {
-			return fmt.Errorf("could not create source from embedded: %w", err)
-		}
-	} else if migrationDir == "" {
-		mmVersion, _ := cmd.Flags().GetString("mattermost-version")
-		if mmVersion == "" {
-			return fmt.Errorf("--mattermost-version needs to be supplied to run migrations")
-		}
-		v, err2 := semver.ParseTolerant(mmVersion)
-		if err2 != nil {
-			return fmt.Errorf("could not parse mattermost version: %w", err2)
-		}
-
-		tempDir, err3 := os.MkdirTemp("", "mattermost")
-		if err3 != nil {
-			return fmt.Errorf("could not create temp directory: %w", err3)
-		}
-
-		baseLogger.Printf("cloning %s@%s\n", "repository", v.String())
-		err = git.CloneMigrations(git.CloneOptions{
-			TempRepoPath: tempDir,
-			Output:       "postgres",
-			DriverType:   "postgres",
-			Version:      v,
-		}, verboseLogger)
-		if err != nil {
-			return fmt.Errorf("error during cloning migrations: %w", err)
-		}
-
-		src, err = file.Open("postgres")
-		if err != nil {
-			return fmt.Errorf("could not read migrations: %w", err)
-		}
-	} else {
-		src, err = file.Open(migrationDir)
-		if err != nil {
-			return fmt.Errorf("could not read migrations: %w", err)
-		}
+	src, err := determineSource(mysqlMigrations, migrationDir, mmVersion, baseLogger, verboseLogger)
+	if err != nil {
+		return fmt.Errorf("could not determine source: %w", err)
 	}
 
 	// run the migrations
@@ -220,4 +166,68 @@ func runPostMigrateCmdF(c *cobra.Command, args []string) error {
 	baseLogger.Println("indexes created.")
 
 	return nil
+}
+
+func determineSource(appliedMigrations, userSuppliedMigrations, mmVersion string, baseLogger, verboseLogger logger.LogInterface) (sources.Source, error) {
+	switch {
+	case appliedMigrations != "":
+		baseLogger.Printf("loading migrations from the %s file\n", appliedMigrations)
+		// load migrations from the applied migrations file
+		var cfg store.DBConfig
+		f, err2 := os.Open(appliedMigrations)
+		if err2 != nil {
+			return nil, fmt.Errorf("could not open file: %w", err2)
+		}
+		defer f.Close()
+
+		err := json.NewDecoder(f).Decode(&cfg)
+		if err != nil {
+			return nil, fmt.Errorf("could not decode file: %w", err)
+		}
+
+		src, err := store.CreateSourceFromEmbedded(queries.Assets(), "migrations/postgres", cfg.AppliedMigrations)
+		if err != nil {
+			return nil, fmt.Errorf("could not create source from embedded: %w", err)
+		}
+
+		return src, nil
+	case userSuppliedMigrations != "":
+		src, err := file.Open(userSuppliedMigrations)
+		if err != nil {
+			return nil, fmt.Errorf("could not read migrations: %w", err)
+		}
+
+		return src, nil
+	default:
+		if mmVersion == "" {
+			return nil, fmt.Errorf("--mattermost-version needs to be supplied to run migrations")
+		}
+		v, err2 := semver.ParseTolerant(mmVersion)
+		if err2 != nil {
+			return nil, fmt.Errorf("could not parse mattermost version: %w", err2)
+		}
+
+		tempDir, err3 := os.MkdirTemp("", "mattermost")
+		if err3 != nil {
+			return nil, fmt.Errorf("could not create temp directory: %w", err3)
+		}
+
+		baseLogger.Printf("cloning %s@%s\n", "repository", v.String())
+		err := git.CloneMigrations(git.CloneOptions{
+			TempRepoPath: tempDir,
+			Output:       "postgres",
+			DriverType:   "postgres",
+			Version:      v,
+		}, baseLogger)
+		if err != nil {
+			return nil, fmt.Errorf("error during cloning migrations: %w", err)
+		}
+
+		src, err := file.Open("postgres")
+		if err != nil {
+			return nil, fmt.Errorf("could not read migrations: %w", err)
+		}
+
+		return src, nil
+	}
 }

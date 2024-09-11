@@ -82,7 +82,16 @@ func runSourceCheckCmdF(cmd *cobra.Command, args []string) error {
 	}
 
 	outputFile, _ := cmd.Flags().GetString("output")
-	if err = os.WriteFile(outputFile, b, 0600); err != nil {
+	if _, err = os.Stat(outputFile); err == nil || os.IsExist(err) {
+		if ConfirmationPrompt("Output file already exists, do you want to overwrite it?") {
+			if err = os.Remove(outputFile); err != nil {
+				return fmt.Errorf("could not remove output file: %w", err)
+			}
+		} else {
+			baseLogger.Println("Output file already exists, will not overwrite it.")
+		}
+	}
+	if err = os.WriteFile(outputFile, b, 0666); err != nil {
 		return fmt.Errorf("could not write to output file: %w", err)
 	}
 

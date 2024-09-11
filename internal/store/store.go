@@ -142,7 +142,7 @@ func (db *DB) RunMigrations(src sources.Source) error {
 	return nil
 }
 
-func CreateSourceFromEbmedded(assets embed.FS, dir string, versions []int) (sources.Source, error) {
+func CreateSourceFromEmbedded(assets embed.FS, dir string, versions []int) (sources.Source, error) {
 	dirEntries, err := assets.ReadDir(dir)
 	if err != nil {
 		return nil, err
