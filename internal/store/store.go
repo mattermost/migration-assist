@@ -1,10 +1,12 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"embed"
 	"fmt"
+	"io"
 	"path/filepath"
 	"time"
 
@@ -12,7 +14,9 @@ import (
 	"github.com/mattermost/morph/drivers"
 	"github.com/mattermost/morph/drivers/mysql"
 	"github.com/mattermost/morph/drivers/postgres"
-	"github.com/mattermost/morph/sources/file"
+	"github.com/mattermost/morph/models"
+	"github.com/mattermost/morph/sources"
+	"github.com/mattermost/morph/sources/embedded"
 
 	"github.com/mattermost/migration-assist/internal/logger"
 )
@@ -26,6 +30,10 @@ type DB struct {
 	databaseName string
 	db           *sql.DB
 	conn         *sql.Conn
+}
+
+type DBConfig struct {
+	AppliedMigrations []int `json:"applied_migrations"`
 }
 
 func NewStore(dbType string, dataSource string) (*DB, error) {
@@ -103,7 +111,7 @@ func (db *DB) RunEmbeddedMigrations(assets embed.FS, dir string, logger logger.L
 }
 
 // RunMigrations will run the migrations form a given directory with morph
-func (db *DB) RunMigrations(dir string) error {
+func (db *DB) RunMigrations(src sources.Source) error {
 	var driver drivers.Driver
 	var err error
 	switch db.dbType {
@@ -121,11 +129,6 @@ func (db *DB) RunMigrations(dir string) error {
 		return fmt.Errorf("unsupported db type: %s", db.dbType)
 	}
 
-	src, err := file.Open(dir)
-	if err != nil {
-		return fmt.Errorf("could not read migrations: %w", err)
-	}
-
 	engine, err := morph.New(context.TODO(), driver, src, morph.WithLogger(logger.NewNopLogger()))
 	if err != nil {
 		return fmt.Errorf("could not initialize morph: %w", err)
@@ -137,4 +140,61 @@ func (db *DB) RunMigrations(dir string) error {
 	}
 
 	return nil
+}
+
+func CreateSourceFromEmbedded(assets embed.FS, dir string, versions []int) (sources.Source, error) {
+	dirEntries, err := assets.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	migrationsShouldBeApplied := make(map[int]string)
+	for _, v := range dirEntries {
+		m, err2 := models.NewMigration(io.NopCloser(bytes.NewReader(nil)), v.Name())
+		if err2 != nil {
+			return nil, fmt.Errorf("could not parse migration: %w", err2)
+		}
+
+		if m.Direction != models.Up {
+			continue
+		}
+
+		migrationsShouldBeApplied[int(m.Version)] = v.Name()
+	}
+
+	assetNames := make([]string, len(versions))
+	for i, v := range versions {
+		assetNames[i] = migrationsShouldBeApplied[v]
+	}
+
+	res := embedded.Resource(assetNames, func(name string) ([]byte, error) {
+		return assets.ReadFile(filepath.Join(dir, name))
+	})
+
+	src, err := embedded.WithInstance(res)
+	if err != nil {
+		return nil, err
+	}
+
+	return src, nil
+}
+
+func (db *DB) GetAppliedMigrations(ctx context.Context) ([]int, error) {
+	rows, err := db.conn.QueryContext(ctx, "SELECT version FROM db_migrations ORDER BY version ASC")
+	if err != nil {
+		return nil, fmt.Errorf("could not get applied migrations: %w", err)
+	}
+	defer rows.Close()
+
+	var versions []int
+	for rows.Next() {
+		var version int
+		if err := rows.Scan(&version); err != nil {
+			return nil, fmt.Errorf("could not scan version: %w", err)
+		}
+
+		versions = append(versions, version)
+	}
+
+	return versions, nil
 }
