@@ -28,7 +28,7 @@ SET MySQL PARAMETERS
     type tinyint when (<= precision 4) to boolean using tinyint-to-boolean,
     type json to jsonb drop typemod{{if .RemoveNullCharacters}} using remove-null-characters{{end}}
 
-EXCLUDING TABLE NAMES MATCHING ~<IR_>, ~<focalboard>, 'schema_migrations', 'db_migrations', 'db_lock',
+EXCLUDING TABLE NAMES MATCHING ~<IR_>, ~<focalboard>, ~<calls>, 'schema_migrations', 'db_migrations', 'db_lock',
     'configurations', 'configurationfiles', 'db_config_migrations'
 
 BEFORE LOAD DO
