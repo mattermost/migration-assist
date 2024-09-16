@@ -14,7 +14,6 @@ import (
 var root = &cobra.Command{
 	Use:           "migration-assist",
 	Short:         "A helper tool to assist a migration from MySQL to Postgres for Mattermost",
-	Version:       "v0.1.0",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
