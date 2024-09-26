@@ -52,6 +52,8 @@ func RunAfterMigration() *cobra.Command {
 		Args:    cobra.MinimumNArgs(1),
 	}
 
+	cmd.Flags().Bool("create-indexes", false, "Creates Fulltext indexes after the migration is completed.")
+
 	return cmd
 }
 
@@ -138,6 +140,12 @@ func runPostMigrateCmdF(c *cobra.Command, args []string) error {
 	baseLogger := logger.NewLogger(os.Stderr, logger.Options{Timestamps: true})
 	schema, _ := c.Flags().GetString("schema")
 
+	var params pgloader.Parameters
+	err := pgloader.ParsePostgres(&params, args[0])
+	if err != nil {
+		return err
+	}
+
 	postgresDB, err := store.NewStore("postgres", args[0])
 	if err != nil {
 		return err
@@ -149,7 +157,18 @@ func runPostMigrateCmdF(c *cobra.Command, args []string) error {
 		return fmt.Errorf("could not check default schema: %w", err)
 	}
 
+	err = postgresDB.CheckPostgresSchemaOwnership(c.Context(), "public", params.PGUser)
+	if err != nil {
+		return fmt.Errorf("could not check default schema: %w", err)
+	}
+
 	baseLogger.Println("running migrations..")
+
+	runMigration, _ := c.Flags().GetBool("create-indexes")
+	if !runMigration {
+		baseLogger.Println("index creation skipped.")
+		return nil
+	}
 
 	err = postgresDB.RunEmbeddedMigrations(queries.Assets(), "post-migrate", baseLogger)
 	if err != nil {
