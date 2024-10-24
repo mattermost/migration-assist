@@ -63,11 +63,14 @@ func (db *DB) CheckPostgresDefaultSchema(ctx context.Context, schema string, log
 		}
 		schemas = append(schemas, s)
 	}
+	slices.Sort(schemas)
+
+	schemaSetting := fmt.Sprintf("%q, %s", "$user", schema)
 	if len(schemas) == 0 {
 		return fmt.Errorf("no value available for search_path")
-	} else if _, ok := slices.BinarySearch(schemas, schema); !ok {
+	} else if _, ok := slices.BinarySearch(schemas, schemaSetting); !ok {
 		logger.Printf("could not find the default schema %q in search_path, consider setting it from the postgresql console\n", schema)
-		err := db.ExecQuery(ctx, fmt.Sprintf("SELECT pg_catalog.set_config('search_path', '\"$user\", %s', false)", schema))
+		err := db.ExecQuery(ctx, fmt.Sprintf("SELECT pg_catalog.set_config('search_path', '%s', false)", schemaSetting))
 		if err != nil {
 			return fmt.Errorf("could not set search_path for the session: %w", err)
 		}
