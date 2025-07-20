@@ -1,1 +1,1 @@
-UPDATE RecentSearches SET Query = REPLACE(Query, '\\u0000', '') WHERE Query LIKE '%\u0000%';
+CALL CleanUnicodeEscapes('RecentSearches', 'Query');

@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/blang/semver/v4"
@@ -133,6 +134,10 @@ func runSourceCheckCmdF(cmd *cobra.Command, args []string) error {
 	}
 
 	fixUnicode, _ := cmd.Flags().GetBool("fix-unicode")
+
+	if err = checkMySQLDBVersion(mysqlDB, baseLogger, fixUnicode); err != nil {
+		return fmt.Errorf("error during checking MySQL version: %w", err)
+	}
 
 	err = runChecksForMySQL(mysqlDB, "unicode", fixUnicode, baseLogger, verboseLogger)
 	if err != nil {
@@ -329,6 +334,31 @@ func runFullSchemaCheck(db *store.DB, migrationsDir, tempDir string, v semver.Ve
 	err = store.CompareMySQL(db, testDB, baseLogger, verboseLogger, saveDiff)
 	if err != nil {
 		return fmt.Errorf("failed to run schema comparison: %w", err)
+	}
+
+	return nil
+}
+
+func checkMySQLDBVersion(db *store.DB, baseLogger logger.LogInterface, fixUnicode bool) error {
+	row := db.GetDB().QueryRow(`SELECT VERSION()`)
+	if err := row.Err(); err != nil {
+		return fmt.Errorf("could not get MySQL version: %w", err)
+	}
+
+	var version string
+	if err := row.Scan(&version); err != nil {
+		return fmt.Errorf("could not scan MySQL version: %w", err)
+	}
+	baseLogger.Printf("MySQL version: %s\n", version)
+
+	extractedMajorVersion := strings.Split(version, ".")[0]
+	majorVersion, err := strconv.Atoi(extractedMajorVersion)
+	if err != nil {
+		return fmt.Errorf("could not parse MySQL major version: %w", err)
+	}
+
+	if fixUnicode && majorVersion < 8 {
+		return fmt.Errorf("db version %s is not supported for unicode fixes, please use MySQL 8.x", version)
 	}
 
 	return nil

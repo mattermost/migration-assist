@@ -1,1 +1,1 @@
-UPDATE LinkMetadata SET Data = REPLACE(Data, '\\u0000', '') WHERE Data LIKE '%\u0000%';
+CALL CleanUnicodeEscapes('LinkMetadata', 'Data');
