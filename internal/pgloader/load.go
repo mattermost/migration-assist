@@ -4,10 +4,11 @@ import (
 	"embed"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
-	"regexp"
 	"text/template"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/mattermost/migration-assist/internal/logger"
 	"github.com/mattermost/migration-assist/internal/store"
 )
@@ -116,43 +117,45 @@ func GenerateConfigurationFile(output, product string, config PgLoaderConfig, ba
 }
 
 func parseMySQL(params *Parameters, dsn string) error {
-	regex := regexp.MustCompile(`^(?P<user>[^:]+):(?P<password>[^@]+)@tcp\((?P<address>[^:]+):(?P<port>\d+)\)\/(?P<database>.+)$`)
-	match := regex.FindStringSubmatch(dsn)
-
-	if len(match) > 0 {
-		user := match[regex.SubexpIndex("user")]
-		password := match[regex.SubexpIndex("password")]
-		address := match[regex.SubexpIndex("address")]
-		port := match[regex.SubexpIndex("port")]
-		database := match[regex.SubexpIndex("database")]
-
-		params.MySQLAddress = fmt.Sprintf("%s:%s", address, port)
-		params.MySQLUser = user
-		params.MySQLPassword = password
-		params.SourceSchema = database
-	} else {
-		return fmt.Errorf("no match found")
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return fmt.Errorf("could not parse MySQL DSN: %w", err)
 	}
+
+	params.MySQLAddress = cfg.Addr
+	params.MySQLUser = cfg.User
+	params.MySQLPassword = cfg.Passwd
+	params.SourceSchema = cfg.DBName
+
 	return nil
 }
 
 func ParsePostgres(params *Parameters, dsn string) error {
-	regex := regexp.MustCompile(`^postgres:\/\/(?P<user>[^:]+):(?P<password>[^@]+)@(?P<address>[^:]+):(?P<port>\d+)\/(?P<database>[^\?]+)`)
-	match := regex.FindStringSubmatch(dsn)
-
-	if len(match) > 0 {
-		user := match[regex.SubexpIndex("user")]
-		password := match[regex.SubexpIndex("password")]
-		address := match[regex.SubexpIndex("address")]
-		port := match[regex.SubexpIndex("port")]
-		database := match[regex.SubexpIndex("database")]
-
-		params.PGAddress = fmt.Sprintf("%s:%s", address, port)
-		params.PGUser = user
-		params.PGPassword = password
-		params.TargetSchema = database
-	} else {
-		return fmt.Errorf("no match found")
+	uri, err := url.Parse(dsn)
+	if err != nil {
+		return fmt.Errorf("could not parse PostgreSQL DSN: %w", err)
 	}
+
+	if uri.Scheme != "postgres" && uri.Scheme != "postgresql" && uri.Scheme != "pgsql" {
+		return fmt.Errorf("invalid scheme: expected postgres or postgresql, got %s", uri.Scheme)
+	}
+
+	params.PGUser = uri.User.Username()
+	params.PGPassword, _ = uri.User.Password()
+
+	host := uri.Hostname()
+	port := uri.Port()
+	if port == "" {
+		port = "5432" // default PostgreSQL port
+	}
+	params.PGAddress = fmt.Sprintf("%s:%s", host, port)
+
+	// Remove leading slash from path
+	dbName := uri.Path
+	if len(dbName) > 0 && dbName[0] == '/' {
+		dbName = dbName[1:]
+	}
+	params.TargetSchema = dbName
+
 	return nil
 }
