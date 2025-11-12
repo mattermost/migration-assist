@@ -1,3 +1,5 @@
+version: 2
+
 before:
   hooks:
     - go mod tidy
@@ -7,6 +9,7 @@ builds:
     id: "migration-assist"
     env:
       - CGO_ENABLED=0
+      - GOTOOLCHAIN=1.22.2
     ldflags:
       - -s -w -X github.com/mattermost/migration-assist/cmd/migration-assist/commands.Version={{.Version}}
     goos:
@@ -17,8 +20,7 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
-    name_template: >-
+   - name_template: >-
       {{ .ProjectName }}-{{- title .Os }}-{{- if eq .Arch "amd64" }}x86_64
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
