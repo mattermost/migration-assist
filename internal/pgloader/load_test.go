@@ -275,7 +275,7 @@ func TestParsePostgres(t *testing.T) {
 				PGAddress:    "invalid-dsn:5432",
 				TargetSchema: "",
 			},
-			wantError: false,
+			wantError: true,
 		},
 		{
 			name:      "invalid PostgreSQL DSN - empty string",

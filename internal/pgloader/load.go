@@ -157,5 +157,9 @@ func ParsePostgres(params *Parameters, dsn string) error {
 	}
 	params.TargetSchema = dbName
 
+	if dbName == "" {
+		return fmt.Errorf("database name is empty, please provide a valid database name")
+	}
+
 	return nil
 }
