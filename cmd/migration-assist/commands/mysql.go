@@ -38,6 +38,7 @@ func SourceCheckCmd() *cobra.Command {
 	cmd.Flags().Bool("fix-unicode", false, "Removes the unsupported unicode characters from MySQL tables")
 	cmd.Flags().Bool("full-schema-check", false, "Checks the MySQL schema to determine whether it's in desired state")
 	cmd.Flags().Bool("save-diff", false, "Writes diffs to files")
+	cmd.Flags().Bool("ping-only", false, "Only verify connectivity to the MySQL server and exit without running checks")
 	cmd.Flags().String("migrations-dir", "", "Migrations directory (should be used if mattermost-version is not supplied)")
 	cmd.Flags().String("mattermost-version", "v9.7", "Mattermost version to be cloned to run migrations")
 	cmd.Flags().String("output", "mysql.output", "Output file for the applied migrations, postgres subcommands will use this file to apply the migrations")
@@ -68,6 +69,10 @@ func runSourceCheckCmdF(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("could not ping mysql: %w", err)
 	}
 	baseLogger.Println("connected to mysql successfully...")
+
+	if pingOnly, _ := cmd.Flags().GetBool("ping-only"); pingOnly {
+		return nil
+	}
 
 	applied, err := mysqlDB.GetAppliedMigrations(cmd.Context())
 	if err != nil {

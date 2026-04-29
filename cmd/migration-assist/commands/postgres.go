@@ -38,6 +38,7 @@ func TargetCheckCmd() *cobra.Command {
 	cmd.Flags().String("git", "git", "git binary to be executed if the repository will be cloned (ie. --mattermost-version is supplied)")
 	cmd.Flags().Bool("check-schema-owner", true, "Check if the schema owner is the same as the user running the migration")
 	cmd.Flags().Bool("check-tables-empty", true, "Check if tables are empty before running migrations")
+	cmd.Flags().Bool("ping-only", false, "Only verify connectivity to the Postgres server and exit without running checks")
 	cmd.PersistentFlags().String("schema", "public", "the default schema to be used for the session")
 
 	return cmd
@@ -80,6 +81,10 @@ func runTargetCheckCmdF(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("could not ping postgres: %w", err)
 	}
 	baseLogger.Println("connected to postgres successfully.")
+
+	if pingOnly, _ := cmd.Flags().GetBool("ping-only"); pingOnly {
+		return nil
+	}
 
 	var params pgloader.Parameters
 	err = pgloader.ParsePostgres(&params, args[0])
