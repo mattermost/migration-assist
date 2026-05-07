@@ -40,5 +40,5 @@ BEFORE LOAD DO
 AFTER LOAD DO
     $$ UPDATE {{ .SourceSchema }}.db_migrations set name='add_createat_to_teamembers' where version=92; $$,
     $$ ALTER SCHEMA {{ .SourceSchema }} RENAME TO public; $$,
-    $$ SELECT pg_catalog.set_config('search_path', '"$user", {{ .SearchPath }}', false); $$,
-    $$ ALTER USER {{ .PGUser }} SET SEARCH_PATH TO '{{ .SearchPath }}'; $$;
+    $$ SELECT pg_catalog.set_config('search_path', '{{ .SearchPath }}', false); $$,
+    $$ ALTER USER {{ .PGUser }} SET search_path TO {{ .SearchPath }}; $$;

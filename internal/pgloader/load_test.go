@@ -1,7 +1,11 @@
 package pgloader
 
 import (
+	"bytes"
+	"fmt"
+	"strings"
 	"testing"
+	"text/template"
 )
 
 func TestParseMySQL(t *testing.T) {
@@ -312,6 +316,68 @@ func TestParsePostgres(t *testing.T) {
 			}
 			if params.TargetSchema != tt.want.TargetSchema {
 				t.Errorf("ParsePostgres() TargetSchema = %v, want %v", params.TargetSchema, tt.want.TargetSchema)
+			}
+		})
+	}
+}
+
+// TestSearchPathTemplateRendering guards against regression of the
+// `search_path` interpolation defect where the AFTER LOAD DO block emitted
+// `'"$user", "$user", public'` (duplicate `"$user"`) and wrapped the
+// ALTER USER value in single quotes, producing a fragile string-literal
+// search_path that could not be parsed back into a valid identifier list.
+func TestSearchPathTemplateRendering(t *testing.T) {
+	templates := []string{"config", "boards", "playbooks", "calls"}
+
+	params := Parameters{
+		MySQLUser:     "mmuser",
+		MySQLPassword: "mmpass",
+		MySQLAddress:  "127.0.0.1:3306",
+		SourceSchema:  "mattermost",
+		PGUser:        "mmuser",
+		PGPassword:    "mmpass",
+		PGAddress:     "127.0.0.1:5432",
+		TargetSchema:  "mattermost",
+		SearchPath:    `"$user", public`,
+	}
+
+	for _, name := range templates {
+		t.Run(name, func(t *testing.T) {
+			body, err := assets.ReadFile(fmt.Sprintf("templates/%s.tmpl", name))
+			if err != nil {
+				t.Fatalf("could not read template %s: %v", name, err)
+			}
+
+			tmpl, err := template.New(name).Parse(string(body))
+			if err != nil {
+				t.Fatalf("could not parse template %s: %v", name, err)
+			}
+
+			var buf bytes.Buffer
+			if err := tmpl.Execute(&buf, params); err != nil {
+				t.Fatalf("could not execute template %s: %v", name, err)
+			}
+			got := buf.String()
+
+			if strings.Contains(got, `"$user", "$user"`) {
+				t.Errorf("template %s emitted a duplicated `\"$user\"` in the search_path; got:\n%s", name, got)
+			}
+
+			wantSetConfig := `set_config('search_path', '"$user", public', false)`
+			if !strings.Contains(got, wantSetConfig) {
+				t.Errorf("template %s missing expected set_config call %q; got:\n%s", name, wantSetConfig, got)
+			}
+
+			wantAlterUser := `ALTER USER mmuser SET search_path TO "$user", public;`
+			if !strings.Contains(got, wantAlterUser) {
+				t.Errorf("template %s missing expected ALTER USER statement %q; got:\n%s", name, wantAlterUser, got)
+			}
+
+			if strings.Contains(got, `SET search_path TO '"$user", public'`) ||
+				strings.Contains(got, `SET SEARCH_PATH TO '"$user", public'`) ||
+				strings.Contains(got, `SET search_path TO '$user, public'`) ||
+				strings.Contains(got, `SET SEARCH_PATH TO '$user, public'`) {
+				t.Errorf("template %s wrapped the ALTER USER search_path in a single-quoted string literal; got:\n%s", name, got)
 			}
 		})
 	}
